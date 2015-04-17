@@ -1,6 +1,7 @@
 script: |
-    sudo pip install pelican && \
-    pelican content -s pelicanconf.py -o output
-    sudo pip install ghp-import && \
+    sudo pip install pelican markdown ghp-import && \
+    pelican content -s pelicanconf.py -o output && \
     ghp-import -n output && \
+    git commit -am "Updated cache."
+    git push https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git master
     git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
