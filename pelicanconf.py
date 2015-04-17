@@ -4,9 +4,9 @@ from __future__ import unicode_literals
 
 AUTHOR = 'Joshua R. Rodgers'
 SITENAME = 'The Enginerd'
-SITEURL = ''
+SITEURL = 'http://mr-byte.github.io/blog'
 
-SOURCE_URL = 'http://github.com/mr-byte/mr-byte.github.io'
+GITHUB_URL = 'http://github.com/mr-byte/blog'
 
 PATH = 'Programming'
 
