@@ -1,0 +1,6 @@
+after_success: |
+    sudo pip install pelican && \
+    pelican content -s pelicanconf.py -o output
+    sudo pip install ghp-import && \
+    ghp-import -n output && \
+    git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
