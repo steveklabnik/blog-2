@@ -7,7 +7,7 @@ cache:
 script: |
     git config --global user.email "bytemr@gmail.com"
     git config --global user.name "Joshua Rodgers"
-    pip install pelican markdown ghp-import -b ~\build && \
+    pip install pelican markdown ghp-import --root ~\pip -b ~\build && \
     pelican content -s pelicanconf.py -o output && \
     ghp-import -n output && \
     git push -qf https://${TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
