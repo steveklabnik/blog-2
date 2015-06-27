@@ -9,7 +9,7 @@ Summary: A discussion about using traits on generics in rust.
 
 # Introduction
 
-I've been developing quite a bit of rust lately for my project (dx-rs)[https://github.com/dx-rs] which aims to be a safe
+I've been developing quite a bit of rust lately for my project [dx-rs](https://github.com/dx-rs) which aims to be a safe
 abstraction around DirectX, which uses COM (a stable ABI developed by Microsoft).  The way COM works requires my project
 to have its own smart pointer type to ensure that the objects are cleaned up when they're no longer used, since COM uses
 reference counting managed by the objects themselves to ensure that they are freed when they're no longer in use.
