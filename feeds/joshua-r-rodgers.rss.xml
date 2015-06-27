@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>The Enginerd</title><link>http://mr-byte.github.io/blog/</link><description></description><atom:link href="http://mr-byte.github.io/blog/feeds/joshua-r-rodgers.rss.xml" rel="self"></atom:link><lastBuildDate>Sat, 27 Jun 2015 11:31:00 -0600</lastBuildDate><item><title>Traits on Generics</title><link>http://mr-byte.github.io/blog/blog/2015/06/27/traits-on-generics/</link><description>&lt;h1&gt;Introduction&lt;/h1&gt;
+&lt;p&gt;I've been developing quite a bit of rust lately for my project (dx-rs)[https://github.com/dx-rs] which aims to be a safe
+abstraction around DirectX, which uses COM (a stable ABI developed by Microsoft).  The way COM works requires my project
+to have its own smart pointer type to ensure that the objects are cleaned up when they're no longer used, since COM uses
+reference counting managed by the objects themselves to ensure that they are freed when they're no longer in use.&lt;/p&gt;
+&lt;p&gt;I've iterated several designs around this smart pointer over time and the design of this library has changed quite a
+bit.  I've wound up heavily leveraging traits to make this type work as expected.  This type itself is generic which
+means in the process, I've learned a lot of things about generics in rust in association with traits.  There was one
+feature that really stuck out to me in the end, though.  That is the ability to implement traits on generics, thus
+implementing the trait for an entire set of types.  Something that I find incredibly flexible and useful and not found
+in the languages I typically use in my day job, like Java.  I wanted to show a few examples of how this works and why I
+enjoy this feature so much.&lt;/p&gt;
+&lt;h1&gt;An Introduction to Traits&lt;/h1&gt;
+&lt;p&gt;When first learning about traits, you'll usually see them used in a context very similar to interfaces in Java or C#
+where the trait is used to extend a concrete type and then used as a constraint.  For this example I'm going to
+introduce a trait called &lt;code&gt;PrintDebug&lt;/code&gt; which looks as follows:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;trait&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PrintDebug&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;print_debug&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;This trait is essentially used to extend types with a simple method to print the debug value of an instance of a type.
+The typical and most basic example of this would be extending your own type, such as:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="cp"&gt;#[derive(Debug)]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="k"&gt;struct&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Test&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PrintDebug&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Test&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;print_debug&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="nb"&gt;println&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;{:?}&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;do_stuff&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PrintDebug&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;value&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;test&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;print_debug&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;main&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;test&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Test&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="n"&gt;do_Stuff&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;test&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Which is very similar to how one would use interfaces in other languages.  Definitely a useful pattern.  The next
+pattern someone learning traits might encounter is using a trait to extend another type, which is not a part of their
+own crate.  This typically goes like:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PrintDebug&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i32&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;print_debug&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="nb"&gt;println&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;{:?}&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Again, an incredibly useful pattern and very similar to extension methods in C#.&lt;/p&gt;
+&lt;p&gt;The problem here, is that both these implementations are restricted to a single type and would have to end up
+implementing this trait on every type you need the trait for by hand.  For certain sets of types (e.g. all &lt;code&gt;Debug&lt;/code&gt;
+types) this can be a lot of implementations and not even feasible, because the set of these types cannot be known at
+compile time by the developer.  This is where generics to the rescue!&lt;/p&gt;
+&lt;h1&gt;Generics and Traits, Best Friends Forever&lt;/h1&gt;
+&lt;p&gt;Generics and traits truly are best friends forever.  They work together to achieve some great things. I want to show
+some examples of why this is.&lt;/p&gt;
+&lt;p&gt;Let's say I wanted to implement &lt;code&gt;PrintDebug&lt;/code&gt; on every type that also implemented &lt;code&gt;Debug&lt;/code&gt;.  That's not feasible to do by
+hand for reasons outlined earlier.  So, how do I do this?  Well, you can implement traits on generics! For example:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Debug&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;PrintDebug&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;print_debug&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="nb"&gt;println&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;&amp;quot;{:?}&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;See what I did there?  I declared a generic parameter on the &lt;code&gt;impl&lt;/code&gt;, constrained it to &lt;code&gt;Debug&lt;/code&gt; types, and then
+implemented &lt;code&gt;PrintDebug&lt;/code&gt; on the generic parameter &lt;code&gt;T&lt;/code&gt;.  I find this incredibly cool.  This would be very similar to
+implementing an extension method on an &lt;code&gt;IDebug&lt;/code&gt; interface in C#.  It's a huge time saver and for writing your own
+libraries it allows you to ensure all the types in your crate and any crate that uses your crate with types that meet
+your constraints will end up implementing this trait.  Of course, this means there has to be some rules about how these
+sort of implementations must work.  These rules are known as trait coherence (I'll describe this in a future post). So
+this sort of implementation won't work in some scenarios, but as long as the trait is a trait you declared in your crate
+, you can rest easy knowing that you have full control over how that trait will get implemented on types.&lt;/p&gt;
+&lt;p&gt;You can even use this pattern to extend types which take a generic parameter.  Drawing an example from my own work,
+we'll use a struct called &lt;code&gt;ComPtr&lt;/code&gt; which is a generic.  I won't describe this type in-depth, but I'll write a short
+example of using this pattern on a generic struct.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Deref&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ComPtr&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;type&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Target&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;deref&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;inner&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Here I implemented a built-in trait &lt;code&gt;Deref&lt;/code&gt; on all &lt;code&gt;ComPtr&amp;lt;T&amp;gt;&lt;/code&gt; types.  Incredibly useful pattern, for sure!  Of course
+you can also use constraints on the generic parameters to implement the trait for a subset of &lt;code&gt;ComPtr&amp;lt;T&amp;gt;&lt;/code&gt; types where
+&lt;code&gt;T&lt;/code&gt; meets the specific traits.  An example of this would be:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;unsafe&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Send&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Send&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ComPtr&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Here I've implemented &lt;code&gt;Send&lt;/code&gt; on &lt;code&gt;ComPtr&amp;lt;T&amp;gt;&lt;/code&gt; if and only if &lt;code&gt;T&lt;/code&gt; is also &lt;code&gt;Send&lt;/code&gt;.  Which means &lt;code&gt;ComPtr&amp;lt;T&amp;gt;&lt;/code&gt; is only
+&lt;code&gt;Send&lt;/code&gt;able if &lt;code&gt;T&lt;/code&gt; itself is &lt;code&gt;Send&lt;/code&gt;able.  We can ignore the &lt;code&gt;unsafe&lt;/code&gt; portion for now, I'll look into blogging about this
+in the future.&lt;/p&gt;
+&lt;p&gt;So far all the examples I've demonstrated are very similar to C# extension methods.  However, there's still more to show
+when it comes to traits and generics in Rust.&lt;/p&gt;
+&lt;p&gt;For example, let's say I have two traits in my crate defined as (note, these are abridged examples):&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;trait&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Serializable&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="k"&gt;trait&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Serialize&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;serialize&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;String&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;I could then do a generic implementation along the lines of:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Serializable&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Serialize&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;T&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;frobulate&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;String&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="c1"&gt;//Serilization happens here!&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;So far, this isn't really too different from my other examples, but what if I implement &lt;code&gt;Frobulable&lt;/code&gt; on &lt;code&gt;i32&lt;/code&gt;?&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Serializable&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i32&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Well now... suddenly a built-in type like i32 is extended to be &lt;code&gt;Serializable&lt;/code&gt;.  As long as &lt;code&gt;i32&lt;/code&gt; meets the requirements
+to be serialized by the blanket implementation of &lt;code&gt;Serialize&lt;/code&gt;, then everything is great!  What if &lt;code&gt;i32&lt;/code&gt; doesn't meet
+those requirements?  We could still just implement &lt;code&gt;Serialize&lt;/code&gt; directly on &lt;code&gt;i32&lt;/code&gt; without implementing &lt;code&gt;Serializable&lt;/code&gt; and
+&lt;code&gt;i32&lt;/code&gt; will now still be a &lt;code&gt;Serialize&lt;/code&gt; type.&lt;/p&gt;
+&lt;p&gt;So with this in mind, what's so special about this?  First off, unlike extension methods in C# which only extend a type
+with more methods and not the type itself, traits can essentially extend arbitrary types (again, there's trait coherence
+restrictions).  That means any &lt;code&gt;impl&lt;/code&gt; of a trait on any given type extends that type not only with the methods of that
+trait, but includes that type in the set of types that trait represents.  So traits are more than extension methods.
+They're extension types.  So you can use traits to extend other traits, which can extend other types.  It's traits all
+the way down.&lt;/p&gt;
+&lt;h1&gt;A Final Word&lt;/h1&gt;
+&lt;p&gt;I find traits in rust to be incredibly useful in designing libraries and all the different features of traits allow you
+to do some really useful abstractions.  I plan to continue talking about other features of traits and their uses in the
+future.  Topics I would like to cover include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Trait coherence&lt;/li&gt;
+&lt;li&gt;Associated items (associated types, consts [future version of rust], etc)&lt;/li&gt;
+&lt;li&gt;Default implementations of methods&lt;/li&gt;
+&lt;li&gt;Unsafe traits&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This was my first ever programming blog post.  I certainly will appreciate any feedback so I can improve my abilities to
+write about these sort of topics.&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Joshua R. Rodgers</dc:creator><pubDate>Sat, 27 Jun 2015 11:31:00 -0600</pubDate><guid>tag:mr-byte.github.io,2015-06-27:blog/blog/2015/06/27/traits-on-generics/</guid><category>programming</category><category>rust</category><category>traits</category><category>generics</category></item><item><title>Welcome</title><link>http://mr-byte.github.io/blog/blog/2015/04/15/welcome/</link><description>&lt;p&gt;Welcome to my new blog!  This is where I plan to blog about programming topics and my hobbies.&lt;/p&gt;
+&lt;p&gt;I plan to blog about programming topics regarding C#, rust, TypeScript, and software design.  I also plan to blog about my hobbies which include charcuterie and 3d printing.  Stay tuned for more!  My first real post will be about my new project &lt;a href="http://www.github.com/Mr-Byte/query_rs/"&gt;query_rs&lt;/a&gt;.  A set of macros and iterators that emulate the C# LINQ syntax inside of rust.&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Joshua R. Rodgers</dc:creator><pubDate>Wed, 15 Apr 2015 20:20:00 -0600</pubDate><guid>tag:mr-byte.github.io,2015-04-15:blog/blog/2015/04/15/welcome/</guid><category>programming</category><category>charcuterie</category><category>3d printing</category></item></channel></rss>

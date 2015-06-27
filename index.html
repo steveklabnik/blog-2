@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="utf-8" />
+        <title>The Enginerd</title>
+        <link rel="stylesheet" href="http://mr-byte.github.io/blog/theme/css/main.css" />
+        <link href="http://mr-byte.github.io/blog/atom.xml" type="application/atom+xml" rel="alternate" title="The Enginerd Atom Feed" />
+
+        <!--[if IE]>
+            <script src="https://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+        <![endif]-->
+</head>
+
+<body id="index" class="home">
+<a href="http://github.com/mr-byte/blog">
+<img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png" alt="Fork me on GitHub" />
+</a>
+        <header id="banner" class="body">
+                <h1><a href="http://mr-byte.github.io/blog/">The Enginerd </a></h1>
+                <nav><ul>
+                    <li><a href="http://mr-byte.github.io/blog/categories/general/">general</a></li>
+                    <li><a href="http://mr-byte.github.io/blog/categories/rust/">rust</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+
+            <aside id="featured" class="body">
+                <article>
+                    <h1 class="entry-title"><a href="http://mr-byte.github.io/blog/blog/2015/06/27/traits-on-generics/">Traits on Generics</a></h1>
+<footer class="post-info">
+        <abbr class="published" title="2015-06-27T11:31:00-06:00">
+                Published: Sat 27 June 2015
+        </abbr>
+		<br />
+        <abbr class="modified" title="2015-06-27T11:31:00-06:00">
+                Updated: Sat 27 June 2015
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="http://mr-byte.github.io/blog/author/joshua-r-rodgers.html">Joshua R. Rodgers</a>
+        </address>
+<p>In <a href="http://mr-byte.github.io/blog/categories/rust/">rust</a>.</p>
+<p>tags: <a href="http://mr-byte.github.io/blog/tag/programming.html">programming</a> <a href="http://mr-byte.github.io/blog/tag/rust.html">rust</a> <a href="http://mr-byte.github.io/blog/tag/traits.html">traits</a> <a href="http://mr-byte.github.io/blog/tag/generics.html">generics</a> </p>
+</footer><!-- /.post-info --><h1>Introduction</h1>
+<p>I've been developing quite a bit of rust lately for my project (dx-rs)[https://github.com/dx-rs] which aims to be a safe
+abstraction around DirectX, which uses COM (a stable ABI developed by Microsoft).  The way COM works requires my project
+to have its own smart pointer type to ensure that the objects are cleaned up when they're no longer used, since COM uses
+reference counting managed by the objects themselves to ensure that they are freed when they're no longer in use.</p>
+<p>I've iterated several designs around this smart pointer over time and the design of this library has changed quite a
+bit.  I've wound up heavily leveraging traits to make this type work as expected.  This type itself is generic which
+means in the process, I've learned a lot of things about generics in rust in association with traits.  There was one
+feature that really stuck out to me in the end, though.  That is the ability to implement traits on generics, thus
+implementing the trait for an entire set of types.  Something that I find incredibly flexible and useful and not found
+in the languages I typically use in my day job, like Java.  I wanted to show a few examples of how this works and why I
+enjoy this feature so much.</p>
+<h1>An Introduction to Traits</h1>
+<p>When first learning about traits, you'll usually see them used in a context very similar to interfaces in Java or C#
+where the trait is used to extend a concrete type and then used as a constraint.  For this example I'm going to
+introduce a trait called <code>PrintDebug</code> which looks as follows:</p>
+<div class="highlight"><pre><span class="k">trait</span><span class="w"> </span><span class="n">PrintDebug</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">print_debug</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">);</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+
+
+<p>This trait is essentially used to extend types with a simple method to print the debug value of an instance of a type.
+The typical and most basic example of this would be extending your own type, such as:</p>
+<div class="highlight"><pre><span class="cp">#[derive(Debug)]</span><span class="w"></span>
+<span class="k">struct</span><span class="w"> </span><span class="n">Test</span><span class="p">;</span><span class="w"></span>
+
+<span class="k">impl</span><span class="w"> </span><span class="n">PrintDebug</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Test</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">print_debug</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="nb">println</span><span class="o">!</span><span class="p">(</span><span class="s">&quot;{:?}&quot;</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+
+<span class="k">fn</span><span class="w"> </span><span class="n">do_stuff</span><span class="o">&lt;</span><span class="n">T</span><span class="o">:</span><span class="w"> </span><span class="n">PrintDebug</span><span class="o">&gt;</span><span class="p">(</span><span class="n">value</span><span class="o">:</span><span class="w"> </span><span class="o">&amp;</span><span class="n">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">test</span><span class="p">.</span><span class="n">print_debug</span><span class="p">();</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+
+<span class="k">fn</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Test</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="n">do_Stuff</span><span class="p">(</span><span class="o">&amp;</span><span class="n">test</span><span class="p">);</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+
+
+<p>Which is very similar to how one would use interfaces in other languages.  Definitely a useful pattern.  The next
+pattern someone learning traits might encounter is using a trait to extend another type, which is not a part of their
+own crate.  This typically goes like:</p>
+<div class="highlight"><pre><span class="k">impl</span><span class="w"> </span><span class="n">PrintDebug</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="kt">i32</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">print_debug</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="nb">println</span><span class="o">!</span><span class="p">(</span><span class="s">&quot;{:?}&quot;</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+
+
+<p>Again, an incredibly useful pattern and very similar to extension methods in C#.</p>
+<p>The problem here, is that both these implementations are restricted to a single type and would have to end up
+implementing this trait on every type you need the trait for by hand.  For certain sets of types (e.g. all <code>Debug</code>
+types) this can be a lot of implementations and not even feasible, because the set of these types cannot be known at
+compile time by the developer.  This is where generics to the rescue!</p>
+<h1>Generics and Traits, Best Friends Forever</h1>
+<p>Generics and traits truly are best friends forever.  They work together to achieve some great things. I want to show
+some examples of why this is.</p>
+<p>Let's say I wanted to implement <code>PrintDebug</code> on every type that also implemented <code>Debug</code>.  That's not feasible to do by
+hand for reasons outlined earlier.  So, how do I do this?  Well, you can implement traits on generics! For example:</p>
+<div class="highlight"><pre><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">:</span><span class="w"> </span><span class="n">Debug</span><span class="o">&gt;</span><span class="w"> </span><span class="n">PrintDebug</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">print_debug</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="nb">println</span><span class="o">!</span><span class="p">(</span><span class="s">&quot;{:?}&quot;</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">)</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+
+
+<p>See what I did there?  I declared a generic parameter on the <code>impl</code>, constrained it to <code>Debug</code> types, and then
+implemented <code>PrintDebug</code> on the generic parameter <code>T</code>.  I find this incredibly cool.  This would be very similar to
+implementing an extension method on an <code>IDebug</code> interface in C#.  It's a huge time saver and for writing your own
+libraries it allows you to ensure all the types in your crate and any crate that uses your crate with types that meet
+your constraints will end up implementing this trait.  Of course, this means there has to be some rules about how these
+sort of implementations must work.  These rules are known as trait coherence (I'll describe this in a future post). So
+this sort of implementation won't work in some scenarios, but as long as the trait is a trait you declared in your crate
+, you can rest easy knowing that you have full control over how that trait will get implemented on types.</p>
+<p>You can even use this pattern to extend types which take a generic parameter.  Drawing an example from my own work,
+we'll use a struct called <code>ComPtr</code> which is a generic.  I won't describe this type in-depth, but I'll write a short
+example of using this pattern on a generic struct.</p>
+<div class="highlight"><pre><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Deref</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ComPtr</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">type</span><span class="w"> </span><span class="n">Target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">deref</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">T</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">inner</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+
+
+<p>Here I implemented a built-in trait <code>Deref</code> on all <code>ComPtr&lt;T&gt;</code> types.  Incredibly useful pattern, for sure!  Of course
+you can also use constraints on the generic parameters to implement the trait for a subset of <code>ComPtr&lt;T&gt;</code> types where
+<code>T</code> meets the specific traits.  An example of this would be:</p>
+<div class="highlight"><pre><span class="k">unsafe</span><span class="w"> </span><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">:</span><span class="w"> </span><span class="nb">Send</span><span class="o">&gt;</span><span class="w"> </span><span class="nb">Send</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ComPtr</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{}</span><span class="w"></span>
+</pre></div>
+
+
+<p>Here I've implemented <code>Send</code> on <code>ComPtr&lt;T&gt;</code> if and only if <code>T</code> is also <code>Send</code>.  Which means <code>ComPtr&lt;T&gt;</code> is only
+<code>Send</code>able if <code>T</code> itself is <code>Send</code>able.  We can ignore the <code>unsafe</code> portion for now, I'll look into blogging about this
+in the future.</p>
+<p>So far all the examples I've demonstrated are very similar to C# extension methods.  However, there's still more to show
+when it comes to traits and generics in Rust.</p>
+<p>For example, let's say I have two traits in my crate defined as (note, these are abridged examples):</p>
+<div class="highlight"><pre><span class="k">trait</span><span class="w"> </span><span class="n">Serializable</span><span class="w"> </span><span class="p">{}</span><span class="w"></span>
+
+<span class="k">trait</span><span class="w"> </span><span class="n">Serialize</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">serialize</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">String</span><span class="p">;</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+
+
+<p>I could then do a generic implementation along the lines of:</p>
+<div class="highlight"><pre><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="o">:</span><span class="w"> </span><span class="n">Serializable</span><span class="o">&gt;</span><span class="w"> </span><span class="n">Serialize</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">frobulate</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="c1">//Serilization happens here!</span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+
+
+<p>So far, this isn't really too different from my other examples, but what if I implement <code>Frobulable</code> on <code>i32</code>?</p>
+<div class="highlight"><pre><span class="k">impl</span><span class="w"> </span><span class="n">Serializable</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="kt">i32</span><span class="w"> </span><span class="p">{}</span><span class="w"></span>
+</pre></div>
+
+
+<p>Well now... suddenly a built-in type like i32 is extended to be <code>Serializable</code>.  As long as <code>i32</code> meets the requirements
+to be serialized by the blanket implementation of <code>Serialize</code>, then everything is great!  What if <code>i32</code> doesn't meet
+those requirements?  We could still just implement <code>Serialize</code> directly on <code>i32</code> without implementing <code>Serializable</code> and
+<code>i32</code> will now still be a <code>Serialize</code> type.</p>
+<p>So with this in mind, what's so special about this?  First off, unlike extension methods in C# which only extend a type
+with more methods and not the type itself, traits can essentially extend arbitrary types (again, there's trait coherence
+restrictions).  That means any <code>impl</code> of a trait on any given type extends that type not only with the methods of that
+trait, but includes that type in the set of types that trait represents.  So traits are more than extension methods.
+They're extension types.  So you can use traits to extend other traits, which can extend other types.  It's traits all
+the way down.</p>
+<h1>A Final Word</h1>
+<p>I find traits in rust to be incredibly useful in designing libraries and all the different features of traits allow you
+to do some really useful abstractions.  I plan to continue talking about other features of traits and their uses in the
+future.  Topics I would like to cover include:</p>
+<ul>
+<li>Trait coherence</li>
+<li>Associated items (associated types, consts [future version of rust], etc)</li>
+<li>Default implementations of methods</li>
+<li>Unsafe traits</li>
+</ul>
+<p>This was my first ever programming blog post.  I certainly will appreciate any feedback so I can improve my abilities to
+write about these sort of topics.</p>                </article>
+            </aside><!-- /#featured -->
+                <section id="content" class="body">
+                    <h1>Other articles</h1>
+                    <hr />
+                    <ol id="posts-list" class="hfeed">
+
+            <li><article class="hentry">
+                <header>
+                    <h1><a href="http://mr-byte.github.io/blog/blog/2015/04/15/welcome/" rel="bookmark"
+                           title="Permalink to Welcome">Welcome</a></h1>
+                </header>
+
+                <div class="entry-content">
+<footer class="post-info">
+        <abbr class="published" title="2015-04-15T20:10:00-06:00">
+                Published: Wed 15 April 2015
+        </abbr>
+		<br />
+        <abbr class="modified" title="2015-04-15T20:20:00-06:00">
+                Updated: Wed 15 April 2015
+        </abbr>
+
+        <address class="vcard author">
+                By                         <a class="url fn" href="http://mr-byte.github.io/blog/author/joshua-r-rodgers.html">Joshua R. Rodgers</a>
+        </address>
+<p>In <a href="http://mr-byte.github.io/blog/categories/general/">general</a>.</p>
+<p>tags: <a href="http://mr-byte.github.io/blog/tag/programming.html">programming</a> <a href="http://mr-byte.github.io/blog/tag/charcuterie.html">charcuterie</a> <a href="http://mr-byte.github.io/blog/tag/3d-printing.html">3d printing</a> </p>
+</footer><!-- /.post-info -->                <p>Welcome to my new blog.</p>
+                <a class="readmore" href="http://mr-byte.github.io/blog/blog/2015/04/15/welcome/">read more</a>
+                </div><!-- /.entry-content -->
+            </article></li>
+                </ol><!-- /#posts-list -->
+<p class="paginator">
+    Page 1 / 1
+</p>
+                </section><!-- /#content -->
+        <section id="extras" class="body">
+                <div class="social">
+                        <h2>social</h2>
+                        <ul>
+                            <li><a href="http://mr-byte.github.io/blog/atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
+
+                        </ul>
+                </div><!-- /.social -->
+        </section><!-- /#extras -->
+
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
+                </address><!-- /#about -->
+
+                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
+
+</body>
+</html>
